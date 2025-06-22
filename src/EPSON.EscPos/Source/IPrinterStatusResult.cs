@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Frostybee.EPSON.EscPos
+namespace Frostybee.EpsonEscPos
 {
     /// <summary>
     /// COM interface for PrinterStatusResult. This is the result of the GetPrinterStatus method.

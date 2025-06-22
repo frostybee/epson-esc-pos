@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Frostybee.EPSON.EscPos
+namespace Frostybee.EpsonEscPos
 {
     using System;
     using System.IO.Ports;
@@ -15,19 +15,10 @@ namespace Frostybee.EPSON.EscPos
     [ComVisible(true)]
     [Guid("E10E9F93-9368-41B9-8859-1DF69E424CEB")]
     [ClassInterface(ClassInterfaceType.None)]
-    public class EpsonPrinterManager : IEpsonPrinterManager, IDisposable
+    public class PrinterManager : IPrinterManager, IDisposable
     {
-        // --- Configuration Constants.
-        private const int BAUD_RATE = 38400; // Baud rate for the SerialPort class.
-        private const Parity PARITY = Parity.None; // Parity for the SerialPort class.
-        private const int DATA_BITS = 8; // Data bits for the SerialPort class.
-        private const StopBits STOP_BITS = StopBits.One; // Stop bits for the SerialPort class.
-        private const int ONLINE_TIMEOUT = 3000;  // This is the timeout for the ReadTimeout property of the SerialPort class.
-        private const int OFFLINE_TIMEOUT = 1000; // Shorter timeout for offline detection.
-        private const int DETECTION_TIMEOUT = 500; // Very short timeout for detection.
-        private const int WRITE_TIMEOUT = 1000; // Timeout for the WriteTimeout property of the SerialPort class.
-        private const int INIT_SLEEP_MS = 100; // Sleep time after sending the INIT command.
-        private const int CLEAR_SLEEP_MS = 50; // Sleep time after sending the CLEAR command.
+        // --- Default configuration for backward compatibility.
+        private static readonly IPrinterConfiguration DefaultConfiguration = new PrinterConfiguration();
 
         // --- Status Byte Masks.
         private const byte FIXED_BIT_0_MASK = 0b00000001; // Bit 0 must be 0
@@ -60,8 +51,19 @@ namespace Frostybee.EPSON.EscPos
         /// </summary>
         public IPrinterStatusResult GetPrinterStatus(string comPortName)
         {
+            return GetPrinterStatus(comPortName, DefaultConfiguration);
+        }
+
+        /// <summary>
+        /// Gets printer status using improved timeout-based detection with custom configuration.
+        /// </summary>
+        public IPrinterStatusResult GetPrinterStatus(string comPortName, IPrinterConfiguration configuration)
+        {
             if (_disposed)
-                throw new ObjectDisposedException(nameof(EpsonPrinterManager));
+                throw new ObjectDisposedException(nameof(PrinterManager));
+
+            if (configuration == null)
+                throw new ArgumentNullException(nameof(configuration));
 
             var result = CreateDefaultResult();
 
@@ -70,21 +72,21 @@ namespace Frostybee.EPSON.EscPos
                 try
                 {
                     // Ensure we have the correct serial port connection.
-                    EnsureSerialPortConnection(comPortName);
+                    EnsureSerialPortConnection(comPortName, configuration);
 
                     // Try to get general status first.
-                    if (TryGetGeneralStatus(result))
+                    if (TryGetGeneralStatus(result, configuration))
                     {
                         // Printer is online, check paper status if cover is closed.
                         if (result.CoverStatus == 1) // Cover closed
                         {
-                            TryGetPaperStatus(result);
+                            TryGetPaperStatus(result, configuration);
                         }
                     }
                     else
                     {
                         // Printer appears offline, try to determine reason.
-                        DetectOfflineReason(result);
+                        DetectOfflineReason(result, configuration);
                     }
                 }
                 catch (UnauthorizedAccessException ex)
@@ -117,7 +119,7 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Ensures we have a properly configured serial port connection.
         /// </summary>
-        private void EnsureSerialPortConnection(string comPortName)
+        private void EnsureSerialPortConnection(string comPortName, IPrinterConfiguration configuration)
         {
             try
             {
@@ -130,10 +132,10 @@ namespace Frostybee.EPSON.EscPos
                 // Create new connection if needed.
                 if (_serialPort == null)
                 {
-                    _serialPort = new SerialPort(comPortName, BAUD_RATE, PARITY, DATA_BITS, STOP_BITS)
+                    _serialPort = new SerialPort(comPortName, configuration.BaudRate, configuration.Parity, configuration.DataBits, configuration.StopBits)
                     {
-                        ReadTimeout = ONLINE_TIMEOUT,
-                        WriteTimeout = WRITE_TIMEOUT
+                        ReadTimeout = configuration.OnlineTimeout,
+                        WriteTimeout = configuration.WriteTimeout
                     };
                     _currentComPort = comPortName;
                 }
@@ -144,7 +146,7 @@ namespace Frostybee.EPSON.EscPos
                     _serialPort.Open();
 
                     // Initialize printer.
-                    InitializePrinter();
+                    InitializePrinter(configuration);
                 }
             }
             catch
@@ -157,18 +159,18 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Initializes the printer with standard commands. This is a standard command for the printer.
         /// </summary>
-        private void InitializePrinter()
+        private void InitializePrinter(IPrinterConfiguration configuration)
         {
             try
             {
                 // ESC @ initializes the printer.
                 _serialPort.Write(INIT_CMD, 0, INIT_CMD.Length);
-                Thread.Sleep(INIT_SLEEP_MS);
+                Thread.Sleep(configuration.InitializationSleepMs);
 
                 // Clear input buffer and NV graphics.
                 _serialPort.DiscardInBuffer();
                 _serialPort.Write(CLEAR_NV_GRAPHICS_CMD, 0, CLEAR_NV_GRAPHICS_CMD.Length);
-                Thread.Sleep(CLEAR_SLEEP_MS);
+                Thread.Sleep(configuration.ClearSleepMs);
             }
             catch (Exception ex)
             {
@@ -180,11 +182,11 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Attempts to get general printer status.
         /// </summary>
-        private bool TryGetGeneralStatus(PrinterStatusResult result)
+        private bool TryGetGeneralStatus(PrinterStatusResult result, IPrinterConfiguration configuration)
         {
             try
             {
-                _serialPort.ReadTimeout = OFFLINE_TIMEOUT; // Use shorter timeout for initial detection.
+                _serialPort.ReadTimeout = configuration.OfflineTimeout; // Use shorter timeout for initial detection.
 
                 // DLE EOT n=1 command for General Printer Status.
                 _serialPort.Write(GENERAL_STATUS_CMD, 0, GENERAL_STATUS_CMD.Length);
@@ -214,11 +216,11 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Attempts to get paper status when printer is online.
         /// </summary>
-        private void TryGetPaperStatus(PrinterStatusResult result)
+        private void TryGetPaperStatus(PrinterStatusResult result, IPrinterConfiguration configuration)
         {
             try
             {
-                _serialPort.ReadTimeout = ONLINE_TIMEOUT; // Use longer timeout when we know printer is online.
+                _serialPort.ReadTimeout = configuration.OnlineTimeout; // Use longer timeout when we know printer is online.
                 _serialPort.DiscardInBuffer();
 
                 // DLE EOT n=4 command for Paper Status.
@@ -246,7 +248,7 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Attempts to determine why printer is offline using alternative methods.
         /// </summary>
-        private void DetectOfflineReason(PrinterStatusResult result)
+        private void DetectOfflineReason(PrinterStatusResult result, IPrinterConfiguration configuration)
         {
             // Set offline status.
             result.PrinterStatus = 0; // Offline.
@@ -255,10 +257,10 @@ namespace Frostybee.EPSON.EscPos
             {
                 // Save original timeout and use very short timeout for detection.
                 int originalTimeout = _serialPort.ReadTimeout;
-                _serialPort.ReadTimeout = DETECTION_TIMEOUT;
+                _serialPort.ReadTimeout = configuration.DetectionTimeout;
 
                 // Try initialization and status check again.
-                InitializePrinter();
+                InitializePrinter(configuration);
 
                 _serialPort.Write(GENERAL_STATUS_CMD, 0, GENERAL_STATUS_CMD.Length);
 
@@ -271,7 +273,7 @@ namespace Frostybee.EPSON.EscPos
                     InterpretGeneralStatusByte(response[0], result);
                     if (result.CoverStatus == 1) // Cover closed.
                     {
-                        TryGetPaperStatus(result);
+                        TryGetPaperStatus(result, configuration);
                     }
                 }
                 else
@@ -447,10 +449,21 @@ namespace Frostybee.EPSON.EscPos
         /// </summary>
         public string GetStatusReport(string comPortName)
         {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(EpsonPrinterManager));
+            return GetStatusReport(comPortName, DefaultConfiguration);
+        }
 
-            var status = GetPrinterStatus(comPortName);
+        /// <summary>
+        /// Gets a formatted string containing a comprehensive printer status report with custom configuration.
+        /// </summary>
+        public string GetStatusReport(string comPortName, IPrinterConfiguration configuration)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(PrinterManager));
+
+            if (configuration == null)
+                throw new ArgumentNullException(nameof(configuration));
+
+            var status = GetPrinterStatus(comPortName, configuration);
             var report = new StringBuilder();
 
             // Helper method to get paper status text.
@@ -515,7 +528,7 @@ namespace Frostybee.EPSON.EscPos
         /// <summary>
         /// Finalizer to ensure resources are cleaned up.
         /// </summary>
-        ~EpsonPrinterManager()
+        ~PrinterManager()
         {
             Dispose(false);
         }

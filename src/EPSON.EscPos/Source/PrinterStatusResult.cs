@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Frostybee.EPSON.EscPos
+namespace Frostybee.EpsonEscPos
 {
     [ComVisible(true)]
     [Guid("237278CD-E18F-4C87-B740-14FE6A1C19CE")]
