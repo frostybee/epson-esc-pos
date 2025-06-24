@@ -5,7 +5,7 @@ namespace Frostybee.EpsonEscPos
     /// <summary>
     /// Default implementation of printer configuration with standard EPSON ESC/POS settings.
     /// </summary>
-    public class PrinterConfiguration : IPrinterConfiguration
+    public class PrinterConfiguration
     {
         /// <summary>
         /// Initializes a new instance of PrinterConfiguration with default values.
@@ -16,7 +16,7 @@ namespace Frostybee.EpsonEscPos
             Parity = Parity.None;
             DataBits = 8;
             StopBits = StopBits.One;
-            OnlineTimeout = 3000;
+            OnlineTimeout = 1000;
             OfflineTimeout = 1000;
             DetectionTimeout = 500;
             WriteTimeout = 1000;
