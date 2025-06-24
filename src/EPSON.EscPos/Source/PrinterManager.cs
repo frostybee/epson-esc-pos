@@ -48,7 +48,7 @@ namespace Frostybee.EpsonEscPos
 
         /// <summary>
         /// Gets printer status using improved timeout-based detection.
-        /// </summary>
+        /// </summary>        
         public IPrinterStatusResult GetPrinterStatus(string comPortName)
         {
             return GetPrinterStatus(comPortName, DefaultConfiguration);

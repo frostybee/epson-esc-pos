@@ -19,5 +19,5 @@ namespace Frostybee.EpsonEscPos
         IPrinterStatusResult GetPrinterStatus(string comPortName, IPrinterConfiguration configuration);
         string GetStatusReport(string comPortName);
         string GetStatusReport(string comPortName, IPrinterConfiguration configuration);
-    }
+   }
 }

@@ -18,7 +18,7 @@ namespace Frostybee.EpsonEscPos
             IPrinterStatusResult result = tester.GetPrinterStatus(comPortName);
             DisplayResults(result);
 
-            // Example 2: Using custom configuration
+            // Example 2: Using custom configuration.
             Console.WriteLine("\n=== USING CUSTOM CONFIGURATION ===");
             var customConfig = new PrinterConfiguration(
                 baudRate: 115200,          // Higher speed.
