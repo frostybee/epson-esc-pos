@@ -18,6 +18,11 @@ A .NET Framework library for real-time Epson ESC/POS printer status monitoring a
 
 - .NET Framework 4.8
 - Can be ported to .NET 8 and .NET 9
+- Serial port connection to Epson ESC/POS compatible printer
+
+**Tested Hardware:**
+
+- Epson TM-T20III thermal receipt printer.
   
 ## Usage Examples
 
